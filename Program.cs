@@ -1,18 +1,10 @@
-﻿using Microsoft.VisualBasic;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Collections.Concurrent;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using FFMpegCore;
 using System.Net;// bypassing render
 using System.Text;// bypassing render
-
 
 class Program
 {
@@ -46,36 +38,14 @@ class Program
             }
         });
     }
-
-    static void CropVideo(string inputFilePath, string outputFilePath)
-    {
-        Console.WriteLine("Processing video...");
-        try
-        {
-            string filters = "crop='min(iw,ih)':'min(iw,ih)',scale=512:512";
-
-            FFMpegArguments
-                .FromFileInput(inputFilePath)
-                .OutputToFile(outputFilePath, true, options => options
-                    .WithCustomArgument($"-vf {filters}")
-                    .WithCustomArgument("-t 3")
-                    .WithCustomArgument("-c:v libvpx-vp9 -b:v 400k -an")
-                    .WithFastStart())
-                .ProcessSynchronously();
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine("Error: " + e);
-        }
-    }
     static async Task Main(string[] args)
     {
         StartDummyHttpServer(); // bypassing render
 
-        var botToken = Environment.GetEnvironmentVariable("VIDEOSTICKERS_BOT_TOKEN");
+        var botToken = Environment.GetEnvironmentVariable("VOICES_BOT_TOKEN");
         if (string.IsNullOrWhiteSpace(botToken))
         {
-            Console.WriteLine("❌ Bot token is missing! Set VIDEOSTICKERS_BOT_TOKEN in Render environment.");
+            Console.WriteLine("❌ Bot token is missing! Set VOICES_BOT_TOKEN in Render environment.");
             return;
         }
         Client = new TelegramBotClient(botToken, cancellationToken: _cts.Token);
@@ -102,10 +72,17 @@ class Program
     {
         await Client.DeleteMyCommands();
 
+        var files = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "Voices");
+
         var commands = new List<BotCommand>
         {
             new BotCommand { Command = "start", Description = "Старт" }
         };
+        foreach (var file in files)
+        {
+            string fileName = Path.GetFileName(file).Split('.')[0];
+            commands.Add(new BotCommand { Command = fileName, Description = fileName });
+        }
 
         await Client.SetMyCommands(commands);
         Console.WriteLine("Команди виставлені");
@@ -123,64 +100,59 @@ class Program
         }
     }
 
-    private static Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+    private static async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
         Console.WriteLine(exception);
-        return Task.CompletedTask;
     }
 
     private static async Task OnMessage(Message msg)
     {
         if (msg.Text == "/start")
         {
-            await Client.SendMessage(msg.Chat.Id, "Привіт! Я - бот форматувальщик відео для стикерів тг\n" +
-                "Використання: надішли мені відео, яке хочеш зробити стікером, і я відформатую файл як треба, а потім просто перешли його в стікербот");
+            await Client.SendMessage(msg.Chat.Id, "Для збереження гп відправ команду /save з назвою у відповідь на необхідне гп\n" +
+                "Приклад: /saveexamplename\nДля відправки гп викликай команду з його назвою\nПриклад: /examplename\nВАЖЛИВО! Тільки латиниця, маленьки літери, ніяких особливих символів");
         }
-        else if (msg.Type == MessageType.Video || msg.Type == MessageType.VideoNote)
+        else if (msg.Type == MessageType.Text && msg.Text.Contains("/save") && msg.Text.Length > 5)
         {
-            var fileId = msg.Type == MessageType.Video ? msg.Video?.FileId : msg.VideoNote?.FileId;
-            if (fileId == null)
-            {
-                await Client.SendMessage(msg.Chat.Id, "Файл не знайдено.");
-                return;
-            }
             try
             {
-                await Client.SendMessage(msg.Chat.Id, "Дякую! Триває обробка файлу...");
-                var userId = msg.From?.Id ?? 0;
-                var fileName = userId;
+                var fileId = msg.ReplyToMessage.Voice.FileId;
+                var fileName = msg.Text.Substring(5);
                 var file = await Client.GetFile(fileId);
-                Console.WriteLine("fileName: " + fileName);
-                Console.WriteLine("file: " + file);
 
-                var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{fileName}.mp4");
-                var outFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{fileName}out.webm");
-
+                var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Voices", $"{fileName}.ogg");
                 using (var saveStream = new FileStream(filePath, FileMode.Create))
                 {
-                    Console.WriteLine("Downloading file...");
                     await Client.DownloadFile(file.FilePath, saveStream);
-                    Console.WriteLine("File downloaded! Path: " + filePath);
-                    CropVideo(filePath, outFile);
-                    await SendResultMessage(msg.Chat.Id, filePath, outFile);
                 }
-                System.IO.File.Delete(filePath);
-                System.IO.File.Delete(outFile);
             }
-            catch (Exception e)
+            catch(Exception e)
             {
-                Console.WriteLine(e);
+                Console.WriteLine("Помилка у відповіді або збереженні");
                 await Client.SendMessage(msg.Chat.Id, "Виникла помилка :(");
             }
-            await Client.SendMessage(msg.Chat.Id, "Готово! Надішліть наступний файл");
+        }
+        else if (msg.Type == MessageType.Text && msg.Text.StartsWith("/"))
+        {
+            await SendVoiceMessage(msg.Chat.Id, msg.Text.TrimStart('/'));
         }
     }
 
-    private static async Task SendResultMessage(long chatId, string inFile, string file)
+    private static async Task SendVoiceMessage(long chatId, string fileName)
     {
-        using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+        var lastFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Voices", $"{fileName.Split('@')[0]}.ogg");
+        try
         {
-            await Client.SendVideo(chatId, new InputFileStream(stream, Path.GetFileName(file)));
+            using (var stream = new FileStream(lastFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                await Client.SendVoice(chatId, new InputFileStream(stream, Path.GetFileName(lastFile)));
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Нема файлу з назвою {fileName.Split('@')[0]}");
+            Console.WriteLine(lastFile);
+            await Client.SendMessage(chatId, "Такого файлу нема :(");
         }
     }
 
