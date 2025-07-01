@@ -95,7 +95,7 @@ class Program
 
         await SetBotCommandsAsync();
 
-        var webhookUrl = $"https://voicestelegrambot.onrender.com";
+        var webhookUrl = $"https://voicestelegrambot.onrender.com/api/update";
         await Client.SetWebhook(webhookUrl);
 
         Console.WriteLine("Webhook set to: " + webhookUrl);
