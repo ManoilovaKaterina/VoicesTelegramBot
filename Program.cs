@@ -72,7 +72,8 @@ class Program
     {
         await Client.DeleteMyCommands();
 
-        var files = Directory.GetFiles(AppDomain.CurrentDomain.BaseDirectory, "Voices");
+        var voicesFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Voices");
+        var files = Directory.GetFiles(voicesFolder);
 
         var commands = new List<BotCommand>
         {
