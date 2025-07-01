@@ -143,7 +143,7 @@ class Program
     {
         if (msg.Text == "/start")
         {
-            await Client.SendMessageAsync(msg.Chat.Id, "Для збереження гп відправ команду /save з назвою у відповідь на необхідне гп\n" +
+            await Client.SendMessage(msg.Chat.Id, "Для збереження гп відправ команду /save з назвою у відповідь на необхідне гп\n" +
                 "Приклад: /saveexamplename\nДля відправки гп викликай команду з його назвою\nПриклад: /examplename\nВАЖЛИВО! Тільки латиниця, маленьки літери, ніяких особливих символів");
         }
         else if (msg.Type == MessageType.Text && msg.Text.Contains("/save") && msg.Text.Length > 5)
@@ -153,7 +153,7 @@ class Program
                 var fileId = msg.ReplyToMessage?.Voice?.FileId;
                 if (fileId == null)
                 {
-                    await Client.SendMessageAsync(msg.Chat.Id, "Будь ласка, відповідайте на голосове повідомлення командою /save");
+                    await Client.SendMessage(msg.Chat.Id, "Будь ласка, відповідайте на голосове повідомлення командою /save");
                     return;
                 }
                 var fileName = msg.Text.Substring(5);
@@ -164,12 +164,12 @@ class Program
                 var filePath = Path.Combine(voicesDir, $"{fileName}.ogg");
 
                 using var saveStream = new FileStream(filePath, FileMode.Create);
-                await Client.DownloadFileAsync(file.FilePath, saveStream);
+                await Client.DownloadFile(file.FilePath, saveStream);
             }
             catch (Exception e)
             {
                 Console.WriteLine("Помилка у відповіді або збереженні: " + e);
-                await Client.SendMessageAsync(msg.Chat.Id, "Виникла помилка :(");
+                await Client.SendMessage(msg.Chat.Id, "Виникла помилка :(");
             }
         }
         else if (msg.Type == MessageType.Text && msg.Text.StartsWith("/"))
@@ -183,19 +183,21 @@ class Program
         var lastFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Voices", $"{fileName.Split('@')[0]}.ogg");
         try
         {
-            using var stream = new FileStream(lastFile, FileMode.Open, FileAccess.Read, FileShare.Read);
-            await Client.SendVoiceAsync(chatId, new Telegram.Bot.Types.InputFiles.InputFileStream(stream, Path.GetFileName(lastFile)));
+            using (var stream = new FileStream(lastFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                await Client.SendVoice(chatId, new InputFileStream(stream, Path.GetFileName(lastFile)));
+            }
         }
         catch (Exception e)
         {
             Console.WriteLine($"Нема файлу з назвою {fileName.Split('@')[0]}: {e.Message}");
-            await Client.SendMessageAsync(chatId, "Такого файлу нема :(");
+            await Client.SendMessage(chatId, "Такого файлу нема :(");
         }
     }
 
     private static async Task OnUpdate(Telegram.Bot.Types.CallbackQuery query)
     {
         await Client.AnswerCallbackQueryAsync(query.Id, $"Ви обрали {query.Data}");
-        await Client.SendMessageAsync(query.Message.Chat.Id, $"Юзер {query.From.Username} клікнув на {query.Data}");
+        await Client.SendMessage(query.Message.Chat.Id, $"Юзер {query.From.Username} клікнув на {query.Data}");
     }
 }
