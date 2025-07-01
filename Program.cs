@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -91,13 +91,12 @@ class Program
         var me = await Client.GetMe();
         Console.WriteLine($"@{me.Username} працює... вимкнути на ентер");
 
-        await Client.DeleteWebhookAsync(dropPendingUpdates: true);
+        await Client.DeleteWebhook(dropPendingUpdates: true);
 
         await SetBotCommandsAsync();
 
-        // IMPORTANT: Set webhook URL for your bot here, e.g.:
-        var webhookUrl = $"https://your-render-service-url.com/api/update";
-        await Client.SetWebhookAsync(webhookUrl);
+        var webhookUrl = $"https://voicestelegrambot.onrender.com";
+        await Client.SetWebhook(webhookUrl);
 
         Console.WriteLine("Webhook set to: " + webhookUrl);
 
@@ -157,7 +156,7 @@ class Program
                     return;
                 }
                 var fileName = msg.Text.Substring(5);
-                var file = await Client.GetFileAsync(fileId);
+                var file = await Client.GetFile(fileId);
 
                 var voicesDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Voices");
                 if (!Directory.Exists(voicesDir)) Directory.CreateDirectory(voicesDir);
@@ -197,7 +196,7 @@ class Program
 
     private static async Task OnUpdate(Telegram.Bot.Types.CallbackQuery query)
     {
-        await Client.AnswerCallbackQueryAsync(query.Id, $"Ви обрали {query.Data}");
+        await Client.AnswerCallbackQuery(query.Id, $"Ви обрали {query.Data}");
         await Client.SendMessage(query.Message.Chat.Id, $"Юзер {query.From.Username} клікнув на {query.Data}");
     }
 }
